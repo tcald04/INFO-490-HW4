@@ -1,0 +1,74 @@
+# Builds the three Travel Folio prototypes and publishes them, plus the
+# landing page, as one GitHub Pages site:
+#   /          -> landing/index.html
+#   /model-a/  -> model-a-collection
+#   /model-b/  -> model-b-timeline
+#   /model-c/  -> model-c-location
+name: Deploy to GitHub Pages
+
+# Run on every push to main, and allow manual runs from the Actions tab.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Permissions the deploy step needs to publish to Pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one deployment at a time; a newer push cancels nothing mid-deploy.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Each app installs its own dependencies and builds independently.
+      - name: Build Model A (Collection Board)
+        working-directory: model-a-collection
+        run: npm ci && npm run build
+
+      - name: Build Model B (Timeline Planner)
+        working-directory: model-b-timeline
+        run: npm ci && npm run build
+
+      - name: Build Model C (Location)
+        working-directory: model-c-location
+        run: npm ci && npm run build
+
+      # Combine the landing page and the three build outputs into one folder.
+      - name: Assemble site
+        run: |
+          mkdir -p site
+          cp landing/index.html site/
+          cp -r model-a-collection/dist site/model-a
+          cp -r model-b-timeline/dist site/model-b
+          cp -r model-c-location/dist site/model-c
+
+      - name: Upload site for Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
